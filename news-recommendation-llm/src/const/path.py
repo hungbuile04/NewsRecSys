@@ -16,8 +16,8 @@ CACHE_DIR = PROJECT_ROOT / ".cache"
 MIND_SMALL_DATASET_DIR = MIND_DATASET_DIR / "small"
 # MIND_SMALL_VAL_DATASET_DIR = MIND_SMALL_DATASET_DIR / "val"
 # MIND_SMALL_TRAIN_DATASET_DIR = MIND_SMALL_DATASET_DIR / "train"
-MIND_SMALL_VAL_DATASET_DIR = pathlib.Path("/Users/buihung/RecSys/news_recommender/data/MINDsmall_dev")
-MIND_SMALL_TRAIN_DATASET_DIR = pathlib.Path("/Users/buihung/RecSys/news_recommender/data/MINDsmall_train")
+MIND_SMALL_VAL_DATASET_DIR = pathlib.Path("/content/data/small_dev")
+MIND_SMALL_TRAIN_DATASET_DIR = pathlib.Path("/content/data/small_train")
 
 MIND_LARGE_DATASET_DIR = MIND_DATASET_DIR / "large"
 MIND_LARGE_VAL_DATASET_DIR = MIND_LARGE_DATASET_DIR / "val"
