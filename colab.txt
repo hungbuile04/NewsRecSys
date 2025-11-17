@@ -1,0 +1,45 @@
+# Clone github code
+
+!git clone https://github.com/buihung/RecSysProject.git
+%cd RecSys/news_recommender/model/nrms_bert
+
+# Pull data
+!pip install gdown==4.6.0
+import gdown
+!mkdir -p content/data/small_train content/data/small_dev
+# Download all files
+small_train_file_ids = [
+    '1ygUBSUi0fZFAU7OcdSygRAixrjwDROor',  # news.tsv
+    '18tpIlF46VZOnS-7i8Ic5CTO0kP-E9Twe',  # behaviors.tsv
+    '1O7l4lFn_nNtFRKCL0nzW9mU6XS-tEFLE',  # entity_embedding.vec
+    '1U4DYtOQOU3FVxKU8ClR65yzUp2ACPi3R'   # relation_embedding.vec
+]
+
+small_dev_file_ids = [
+    '19fn7ZOPwH7AeWO9l52vQAltN6lI89G7f',  # news.tsv
+    '15_x3o8rtqY8EAuPFAEHsjjFN7vZD201c',  # behaviors.tsv
+    '13V4JNumyOo5Uu6tSPIsTGdB27_X1HO5K',  # entity_embedding.vec
+    '1Z0lQdWAUhAA18l83cyHBlo3WZNNbQZTe'   # relation_embedding.vec
+]
+
+small_train_file_paths = [
+    'content/data/small_train/news.tsv',
+    'content/data/small_train/behaviors.tsv',
+    'content/data/small_train/entity_embedding.vec',
+    'content/data/small_train/relation_embedding.vec'
+]
+
+small_dev_file_paths = [
+    'content/data/small_dev/news.tsv',
+    'content/data/small_dev/behaviors.tsv',
+    'content/data/small_dev/entity_embedding.vec',
+    'content/data/small_dev/relation_embedding.vec'
+]
+
+
+for file_id, file_path in zip(small_train_file_ids, small_train_file_paths):
+    gdown.download(f'https://drive.google.com/uc?id={file_id}', file_path, quiet=False)
+
+
+for file_id, file_path in zip(small_dev_file_ids, small_dev_file_paths):
+    gdown.download(f'https://drive.google.com/uc?id={file_id}', file_path, quiet=False)

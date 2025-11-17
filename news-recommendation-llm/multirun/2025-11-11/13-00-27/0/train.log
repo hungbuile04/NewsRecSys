@@ -1,0 +1,4 @@
+[2025-11-11 13:00:27,241][root][INFO] - Start
+[2025-11-11 13:00:37,307][root][INFO] - Initialize Model
+[2025-11-11 13:03:30,298][root][INFO] - Initialize Dataset
+[2025-11-11 13:03:30,304][root][ERROR] - [Errno 2] No such file or directory: '/Users/buihung/RecSys/news-recommendation-llm/dataset/mind/small/train/news.tsv'

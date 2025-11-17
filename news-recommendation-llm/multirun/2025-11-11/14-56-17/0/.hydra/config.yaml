@@ -1,0 +1,10 @@
+random_seed: 42
+pretrained: distilbert-base-uncased
+npratio: 4
+history_size: 50
+batch_size: 16
+gradient_accumulation_steps: 8
+epochs: 3
+learning_rate: 0.0001
+weight_decay: 0.0
+max_len: 30

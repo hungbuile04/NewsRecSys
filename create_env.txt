@@ -1,0 +1,3 @@
+conda create -n dl_env python=3.11 -y
+conda activate dl_env
+pip install -r requirements.txt

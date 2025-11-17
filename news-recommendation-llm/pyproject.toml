@@ -1,0 +1,50 @@
+[project]
+name = "news-recommendation-llm"
+version = "0.1.0"
+description = "News recommendation system"
+
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    # Core libs
+    "polars~=0.18.2",
+    "pandas~=2.0.2",
+    "pyarrow~=12.0.0",
+    "requests~=2.31.0",
+    "tqdm~=4.65.0",
+    "pydantic~=1.10.9",
+    "matplotlib~=3.7.1",
+    "scikit-learn~=1.2.2",
+    "torch~=2.0.1",
+    "transformers~=4.30.2",
+    "accelerate~=0.21.0",
+
+    # ✅ Hydra for config management
+    "hydra-core~=1.3.2"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest~=7.3.1",
+    "black~=23.3.0",
+    "ruff~=0.0.270",
+    "mypy~=1.3.0",
+]
+
+[tool.black]
+line-length = 119
+
+[tool.ruff]
+line-length = 119
+
+[tool.mypy]
+python_version = 3.11
+disallow_untyped_defs = true

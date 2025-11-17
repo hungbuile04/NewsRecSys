@@ -1,0 +1,4 @@
+[2025-11-11 14:56:17,743][root][INFO] - Start
+[2025-11-11 14:56:19,258][root][INFO] - Initialize Model
+[2025-11-11 14:56:20,791][root][INFO] - Initialize Dataset
+[2025-11-11 14:56:20,791][root][ERROR] - unsupported operand type(s) for /: 'str' and 'str'
