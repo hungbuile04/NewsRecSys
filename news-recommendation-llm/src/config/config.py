@@ -9,8 +9,8 @@ class TrainConfig:
     pretrained: str = "distilbert-base-uncased"
     npratio: int = 4
     history_size: int = 50
-    batch_size: int = 16
-    gradient_accumulation_steps: int = 8  # batch_size = 16 x 8 = 128
+    batch_size: int = 20
+    gradient_accumulation_steps: int = 8  # batch_size = 20 x 8 = 160
     epochs: int = 3
     learning_rate: float = 1e-4
     weight_decay: float = 0.0
