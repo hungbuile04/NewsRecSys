@@ -165,7 +165,7 @@ def train(
         lr_scheduler_type="constant",
         weight_decay=weight_decay,
         optim="adamw_torch",
-        eval_strategy="no",
+        evaluation_strategy="no",
         save_strategy="epoch",
         gradient_accumulation_steps=gradient_accumulation_steps,
         learning_rate=learning_rate,
