@@ -2,8 +2,7 @@ import os
 import glob
 import re
 from pathlib import Path
-from google.colab import drive
-drive.mount('/content/drive')
+
 # Tắt WANDB nếu không dùng để tránh lỗi login trên Colab
 os.environ["WANDB_DISABLED"] = "true"
 
