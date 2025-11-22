@@ -6,12 +6,10 @@ CURRENT_FILE = pathlib.Path(__file__).resolve()
 
 PROJECT_ROOT = CURRENT_FILE.parent.parent.parent
 
-# === OUTPUT CONFIG (QUAN TRỌNG: Nằm trên Drive) ===
 OUTPUT_DIR = PROJECT_ROOT / "output"
 MODEL_OUTPUT_DIR = OUTPUT_DIR / "model"
 LOG_OUTPUT_DIR = OUTPUT_DIR / "log"
 
-# Tự động tạo các thư mục này nếu chưa tồn tại để tránh lỗi khi chạy train
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 LOG_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -33,3 +31,11 @@ MIND_LARGE_DATASET_DIR = MIND_DATASET_DIR / "large"
 MIND_LARGE_VAL_DATASET_DIR = MIND_LARGE_DATASET_DIR / "val"
 MIND_LARGE_TEST_DATASET_DIR = MIND_LARGE_DATASET_DIR / "test"
 MIND_LARGE_TRAIN_DATASET_DIR = MIND_LARGE_DATASET_DIR / "train"
+
+
+
+
+
+
+
+
