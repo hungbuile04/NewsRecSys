@@ -64,12 +64,12 @@ class MINDTrainDataset(Dataset):
         impressions = np.array(
             behavior_item["impressions"].to_list()[0] + [EMPTY_IMPRESSION]
         )  # NOTE: EMPTY_IMPRESSION_IDX = -1なので最後尾に追加する。
-
-        poss_idxes, neg_idxes = (
-            behavior_item["clicked_idxes"].to_list()[0],
-            behavior_item["non_clicked_idxes"].to_list()[0],
-        )
-
+        ########################################
+        # poss_idxes, neg_idxes = (
+        #    behavior_item["clicked_idxes"].to_list()[0],
+        #    behavior_item["non_clicked_idxes"].to_list()[0],
+        # )
+        ########################################
         # Sampling Positive(clicked) & Negative(non-clicked) Sample
         sample_poss_idxes, sample_neg_idxes = random.sample(poss_idxes, 1), self.__sampling_negative(
             neg_idxes, self.npratio
@@ -83,7 +83,11 @@ class MINDTrainDataset(Dataset):
         # Extract candidate_news & history_news based on sample idxes
         candidate_news_ids = [imp_item["news_id"] for imp_item in sample_impressions]
         labels = [imp_item["clicked"] for imp_item in sample_impressions]
-        history_news_ids = history[: self.history_size]  # TODO: diverse
+        ########################################
+        #history_news_ids = history[: self.history_size]  # TODO: diverse
+
+        history_news_ids = history[-self.history_size:]
+        ########################################
         if len(history) < self.history_size:
             history_news_ids = history_news_ids + [EMPTY_NEWS_ID] * (self.history_size - len(history))
 
@@ -156,7 +160,11 @@ class MINDValDataset(Dataset):
         # Extract candidate_news & history_news based on sample idxes
         candidate_news_ids = [imp_item["news_id"] for imp_item in impressions]
         labels = [imp_item["clicked"] for imp_item in impressions]
-        history_news_ids = history[: self.history_size]  # TODO: diverse
+        ########################################
+        #history_news_ids = history[: self.history_size]  # TODO: diverse
+
+        history_news_ids = history[-self.history_size:]
+        ########################################
         if len(history) < self.history_size:
             history_news_ids = history_news_ids + [EMPTY_NEWS_ID] * (self.history_size - len(history))
 
