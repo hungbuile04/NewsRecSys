@@ -64,8 +64,8 @@ class PLMBasedNewsEncoder(nn.Module):
 # ======================================================
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-model_dir = "model/checkpoint-2943"
-pretrained_name = "distilbert-base-uncased"
+model_dir = "model/checkpoint-2943 2"
+pretrained_name = "bert-base-uncased"
 
 tokenizer = AutoTokenizer.from_pretrained(pretrained_name)
 
