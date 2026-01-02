@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-
+from typing import Optional
 from hydra.core.config_store import ConfigStore
 
 
@@ -16,8 +16,7 @@ class TrainConfig:
     weight_decay: float = 0.0
     max_len: int = 30
 
-    resume_checkpoint: str = None  # resume checkpoint nếu có
+    resume_checkpoint: Optional[str] = None  # resume checkpoint nếu có
 
 cs = ConfigStore.instance()
-
 cs.store(name="train_config", node=TrainConfig)
