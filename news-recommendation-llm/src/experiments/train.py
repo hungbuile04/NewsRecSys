@@ -127,9 +127,10 @@ def train(
         evaluation_strategy="no",
         save_strategy="steps",                                         # Save checkpoint theo step thay vì epoch
         save_steps=1000,                                               # Save mỗi 1000 step
-        num_train_epochs=2,                                            # Train bằng 2 epoch, có thể sửa ở config nhưng thôi làm thế này tiện hơn
-        dataloader_num_workers=4,                                      # Tối ưu CPU
+        num_train_epochs=1,                                            # Train bằng 1 epoch, có thể sửa ở config nhưng thôi làm thế này tiện hơn
+        dataloader_num_workers=2,                                      # Tối ưu CPU
         fp16=True,                                                     # Tối ưu GPU
+        gradient_checkpointing=True,                                   # Tối ưu GPU
         gradient_accumulation_steps=gradient_accumulation_steps,
         learning_rate=learning_rate,
         per_device_train_batch_size=batch_size,
