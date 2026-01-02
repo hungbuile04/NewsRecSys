@@ -96,9 +96,7 @@ def train(
     logging.info("Initialize Model")
     news_encoder = PLMBasedNewsEncoder(pretrained)
     user_encoder = UserEncoder(hidden_size=hidden_size)
-    nrms_net = NRMS(news_encoder=news_encoder, user_encoder=user_encoder, hidden_size=hidden_size, loss_fn=loss_fn).to(
-        device, dtype=torch.bfloat16
-    )
+    nrms_net = NRMS(news_encoder=news_encoder, user_encoder=user_encoder, hidden_size=hidden_size, loss_fn=loss_fn).to(device)
 
     """
     2. Load Data & Create Dataset
