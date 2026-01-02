@@ -62,6 +62,7 @@ def train(
     learning_rate: float,
     weight_decay: float,
     max_len: int,
+    resume_checkpoint: str = None,
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
 ) -> None:
     logging.info("Start")
@@ -143,7 +144,12 @@ def train(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
     )
-    trainer.train()
+    if resume_checkpoint is not None:
+        logging.info(f"Resuming training from checkpoint: {resume_checkpoint}")
+        trainer.train(resume_from_checkpoint=resume_checkpoint)
+    else:
+        logging.info("Starting training from scratch")
+        trainer.train()
 
     """
     4. Evaluate model by Validation Dataset
@@ -173,6 +179,7 @@ def main(cfg: TrainConfig) -> None:
             cfg.learning_rate,
             cfg.weight_decay,
             cfg.max_len,
+            cfg.resume_checkpoint,      # truyền thêm tham số resume_checkpoint
         )
     except Exception as e:
         logging.error(e)
