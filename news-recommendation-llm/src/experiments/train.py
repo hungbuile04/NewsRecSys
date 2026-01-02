@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from pathlib import Path
 from config.config import TrainConfig
-from const.path import LOG_OUTPUT_DIR, MIND_SMALL_TRAIN_DATASET_DIR, MIND_SMALL_VAL_DATASET_DIR, MODEL_OUTPUT_DIR
+from const.path import LOG_OUTPUT_DIR, MIND_LARGE_TRAIN_DATASET_DIR, MODEL_OUTPUT_DIR
 from evaluation.RecEvaluator import RecEvaluator, RecMetrics
 from mind.dataframe import read_behavior_df, read_news_df
 from mind.MINDDataset import MINDTrainDataset, MINDValDataset
@@ -73,7 +73,7 @@ def train(
     loss_fn: nn.Module = nn.CrossEntropyLoss()
     transform_fn = create_transform_fn_from_pretrained_tokenizer(AutoTokenizer.from_pretrained(pretrained), max_len)
 
-    # create a run name once and prefer Drive if available
+    # create a run name
     run_path = generate_folder_name_with_timestamp(MODEL_OUTPUT_DIR)
     run_name = run_path.name
 
@@ -104,13 +104,14 @@ def train(
     """
     logging.info("Initialize Dataset")
 
-    train_news_df = read_news_df(MIND_SMALL_TRAIN_DATASET_DIR / "news.tsv")
-    train_behavior_df = read_behavior_df(MIND_SMALL_TRAIN_DATASET_DIR / "behaviors.tsv")
+    train_news_df = read_news_df(MIND_LARGE_TRAIN_DATASET_DIR / "news.tsv")
+    train_behavior_df = read_behavior_df(MIND_LARGE_TRAIN_DATASET_DIR / "behaviors.tsv")
     train_dataset = MINDTrainDataset(train_behavior_df, train_news_df, transform_fn, npratio, history_size, device)
 
-    val_news_df = read_news_df(MIND_SMALL_VAL_DATASET_DIR / "news.tsv")
-    val_behavior_df = read_behavior_df(MIND_SMALL_VAL_DATASET_DIR / "behaviors.tsv")
-    eval_dataset = MINDValDataset(val_behavior_df, val_news_df, transform_fn, history_size)
+    eval_dataset = None
+    # val_news_df = read_news_df(MIND_SMALL_VAL_DATASET_DIR / "news.tsv")
+    # val_behavior_df = read_behavior_df(MIND_SMALL_VAL_DATASET_DIR / "behaviors.tsv")
+    # eval_dataset = MINDValDataset(val_behavior_df, val_news_df, transform_fn, history_size)
 
     """
     3. Train
@@ -119,20 +120,20 @@ def train(
     training_args = TrainingArguments(
         output_dir=str(model_save_dir),
         logging_strategy="steps",
+        logging_steps=100,                                             # Log mỗi 100 step
         save_total_limit=5,
         lr_scheduler_type="constant",
         weight_decay=weight_decay,
         optim="adamw_torch",
         evaluation_strategy="no",
-        save_strategy="epoch",
+        save_strategy="steps",                                         # Save checkpoint theo step thay vì epoch
+        save_steps=1000,                                               # Save mỗi 1000 step
+        num_train_epochs=2,                                            # Train bằng 2 epoch, có thể sửa ở config nhưng thôi làm thế này tiện hơn
         gradient_accumulation_steps=gradient_accumulation_steps,
         learning_rate=learning_rate,
         per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=EVAL_BATCH_SIZE,
-        num_train_epochs=epochs,
         remove_unused_columns=False,
         logging_dir=str(LOG_OUTPUT_DIR),
-        logging_steps=1,
         report_to="none",
     )
 
@@ -147,9 +148,15 @@ def train(
     """
     4. Evaluate model by Validation Dataset
     """
-    logging.info("Evaluation")
-    metrics = evaluate(trainer.model, eval_dataset, device)
-    logging.info(metrics.dict())
+    logging.info("Training Completed.")             # Chỗ này không cần eval nữa vì train trên MIND Large full rồi
+    # logging.info("Evaluation")
+    # metrics = evaluate(trainer.model, eval_dataset, device)
+    # logging.info(metrics.dict())
+
+    # Lưu model cuối cùng
+    final_save_path = model_save_dir / "final_model"
+    trainer.save_model(str(final_save_path))
+    logging.info(f"Final model saved at {final_save_path}")
 
 
 @hydra.main(version_base=None, config_name="train_config")

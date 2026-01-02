@@ -26,11 +26,8 @@ MIND_SMALL_DATASET_DIR = MIND_DATASET_DIR / "small"
 MIND_SMALL_VAL_DATASET_DIR = pathlib.Path("/content/data/small_dev")
 MIND_SMALL_TRAIN_DATASET_DIR = pathlib.Path("/content/data/small_train")
 
-# MIND Large
-MIND_LARGE_DATASET_DIR = MIND_DATASET_DIR / "large"
-MIND_LARGE_VAL_DATASET_DIR = MIND_LARGE_DATASET_DIR / "val"
-MIND_LARGE_TEST_DATASET_DIR = MIND_LARGE_DATASET_DIR / "test"
-MIND_LARGE_TRAIN_DATASET_DIR = MIND_LARGE_DATASET_DIR / "train"
+# MIND Large (gội cả train và valid lại để train)
+MIND_LARGE_TRAIN_DATASET_DIR = pathlib.Path("/content/data/large_full")
 
 
 

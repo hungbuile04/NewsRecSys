@@ -6,10 +6,10 @@ from hydra.core.config_store import ConfigStore
 @dataclass
 class TrainConfig:
     random_seed: int = 42
-    pretrained: str = "bert-base-uncased"
+    pretrained: str = "distilbert-base-uncased"
     npratio: int = 4
     history_size: int = 50
-    batch_size: int = 16
+    batch_size: int = 32
     gradient_accumulation_steps: int = 8  # batch_size = 32 x 8 = 256
     epochs: int = 3
     learning_rate: float = 1e-4
