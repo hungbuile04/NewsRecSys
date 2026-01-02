@@ -16,6 +16,7 @@ class TrainConfig:
     weight_decay: float = 0.0
     max_len: int = 30
 
+    resume_checkpoint: str = None  # resume checkpoint nếu có
 
 cs = ConfigStore.instance()
 
