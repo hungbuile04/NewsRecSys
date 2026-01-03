@@ -18,14 +18,12 @@ class MINDTrainDataset(Dataset):
         batch_transform_texts: Callable[[list[str]], torch.Tensor],
         npratio: int,
         history_size: int,
-        device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     ) -> None:
         self.behavior_df: pl.DataFrame = behavior_df
         self.news_df: pl.DataFrame = news_df
         self.batch_transform_texts: Callable[[list[str]], torch.Tensor] = batch_transform_texts
         self.npratio: int = npratio
         self.history_size: int = history_size
-        self.device: torch.device = device
 
         self.behavior_df = self.behavior_df.with_columns(
             [
@@ -126,13 +124,11 @@ class MINDValDataset(Dataset):
         news_df: pl.DataFrame,
         batch_transform_texts: Callable[[list[str]], torch.Tensor],
         history_size: int,
-        device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     ) -> None:
         self.behavior_df: pl.DataFrame = behavior_df
         self.news_df: pl.DataFrame = news_df
         self.batch_transform_texts: Callable[[list[str]], torch.Tensor] = batch_transform_texts
         self.history_size: int = history_size
-        self.device: torch.device = device
 
         self.__news_id_to_title_map: dict[str, str] = {
             self.news_df[i]["news_id"].item(): self.news_df[i]["title"].item() for i in range(len(self.news_df))

@@ -98,12 +98,6 @@ def train(
     news_encoder = PLMBasedNewsEncoder(pretrained)
     user_encoder = UserEncoder(hidden_size=hidden_size)
     nrms_net = NRMS(news_encoder=news_encoder, user_encoder=user_encoder, hidden_size=hidden_size, loss_fn=loss_fn).to(device)
-    
-    if training_args.gradient_checkpointing: 
-        logging.info("Applying Gradient Checkpointing Patch for NRMS")
-        def enable_checkpointing(kwargs=None):
-            nrms_net.news_encoder.plm.gradient_checkpointing_enable(kwargs)
-        nrms_net.gradient_checkpointing_enable = enable_checkpointing
 
     """
     2. Load Data & Create Dataset
@@ -119,7 +113,7 @@ def train(
 
     train_news_df = read_news_df(data_path / "news.tsv")
     train_behavior_df = read_behavior_df(data_path / "behaviors.tsv")
-    train_dataset = MINDTrainDataset(train_behavior_df, train_news_df, transform_fn, npratio, history_size, device)
+    train_dataset = MINDTrainDataset(train_behavior_df, train_news_df, transform_fn, npratio, history_size)
 
     eval_dataset = None
     # val_news_df = read_news_df(MIND_SMALL_VAL_DATASET_DIR / "news.tsv")
@@ -154,10 +148,26 @@ def train(
     )
 
     if training_args.gradient_checkpointing:
-        logging.info("Applying Gradient Checkpointing Patch for NRMS")
+        logging.info("Applying Gradient Checkpointing Patch for NRMS (Manual Mode)")
+        
         def enable_checkpointing(gradient_checkpointing_kwargs=None, **kwargs):
-            nrms_net.news_encoder.plm.gradient_checkpointing_enable(gradient_checkpointing_kwargs=gradient_checkpointing_kwargs)
+            # 1. Lấy model DistilBERT ra
+            distilbert = nrms_net.news_encoder.plm
             
+            # 2. BẬT CỜ THỦ CÔNG (Quan trọng nhất)
+            # Thay vì gọi hàm enable() gây lỗi, ta tự set biến này thành True
+            distilbert.gradient_checkpointing = True
+            
+            # Set luôn trong config cho chắc chắn
+            if hasattr(distilbert, "config"):
+                distilbert.config.gradient_checkpointing = True
+                # Tắt cache để tránh lỗi tính toán khi checkpointing
+                if hasattr(distilbert.config, "use_cache"):
+                    distilbert.config.use_cache = False
+            
+            logging.info("Gradient Checkpointing has been MANUALLY ENABLED (Flags set to True).")
+
+        # Gán hàm thủ công này đè lên hàm của NRMS
         nrms_net.gradient_checkpointing_enable = enable_checkpointing
 
     trainer = Trainer(
