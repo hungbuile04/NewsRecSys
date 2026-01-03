@@ -16,6 +16,7 @@ class TrainConfig:
     weight_decay: float = 0.0
     max_len: int = 30
 
+    data_dir: str = "/content/data/large_full"
     resume_checkpoint: Optional[str] = None  # resume checkpoint nếu có
 
 cs = ConfigStore.instance()

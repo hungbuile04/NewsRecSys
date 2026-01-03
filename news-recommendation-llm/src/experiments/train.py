@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from pathlib import Path
 from config.config import TrainConfig
-from const.path import LOG_OUTPUT_DIR, MIND_LARGE_TRAIN_DATASET_DIR, MODEL_OUTPUT_DIR
+from const.path import LOG_OUTPUT_DIR, MIND_LARGE_TRAIN_DATASET_DIR, MIND_SMALL_DATASET_DIR, MIND_SMALL_TRAIN_DATASET_DIR, MIND_SMALL_VAL_DATASET_DIR, MODEL_OUTPUT_DIR
 from evaluation.RecEvaluator import RecEvaluator, RecMetrics
 from mind.dataframe import read_behavior_df, read_news_df
 from mind.MINDDataset import MINDTrainDataset, MINDValDataset
@@ -63,6 +63,7 @@ def train(
     weight_decay: float,
     max_len: int,
     resume_checkpoint: str = None,
+    data_dir: str = "/content/data/large_full",
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
 ) -> None:
     logging.info("Start")
@@ -107,10 +108,17 @@ def train(
     """
     2. Load Data & Create Dataset
     """
-    logging.info("Initialize Dataset")
+    # logging.info("Initialize Dataset")
 
-    train_news_df = read_news_df(MIND_LARGE_TRAIN_DATASET_DIR / "news.tsv")
-    train_behavior_df = read_behavior_df(MIND_LARGE_TRAIN_DATASET_DIR / "behaviors.tsv")
+    # train_news_df = read_news_df(MIND_LARGE_TRAIN_DATASET_DIR / "news.tsv")
+    # train_behavior_df = read_behavior_df(MIND_LARGE_TRAIN_DATASET_DIR / "behaviors.tsv")
+    # train_dataset = MINDTrainDataset(train_behavior_df, train_news_df, transform_fn, npratio, history_size, device)
+
+    data_path = Path(data_dir) 
+    logging.info(f"Loading Data from: {data_path}")
+
+    train_news_df = read_news_df(data_path / "news.tsv")
+    train_behavior_df = read_behavior_df(data_path / "behaviors.tsv")
     train_dataset = MINDTrainDataset(train_behavior_df, train_news_df, transform_fn, npratio, history_size, device)
 
     eval_dataset = None
@@ -144,6 +152,13 @@ def train(
         logging_dir=str(LOG_OUTPUT_DIR),
         report_to="none",
     )
+
+    if training_args.gradient_checkpointing:
+        logging.info("Applying Gradient Checkpointing Patch for NRMS")
+        def enable_checkpointing(gradient_checkpointing_kwargs=None, **kwargs):
+            nrms_net.news_encoder.plm.gradient_checkpointing_enable(gradient_checkpointing_kwargs=gradient_checkpointing_kwargs)
+            
+        nrms_net.gradient_checkpointing_enable = enable_checkpointing
 
     trainer = Trainer(
         model=nrms_net,
@@ -187,6 +202,7 @@ def main(cfg: TrainConfig) -> None:
             cfg.weight_decay,
             cfg.max_len,
             cfg.resume_checkpoint,      # truyền thêm tham số resume_checkpoint
+            cfg.data_dir                # truyền thêm tham số data_dir
         )
     except Exception as e:
         logging.error(e)
