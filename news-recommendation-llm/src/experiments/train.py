@@ -97,6 +97,12 @@ def train(
     news_encoder = PLMBasedNewsEncoder(pretrained)
     user_encoder = UserEncoder(hidden_size=hidden_size)
     nrms_net = NRMS(news_encoder=news_encoder, user_encoder=user_encoder, hidden_size=hidden_size, loss_fn=loss_fn).to(device)
+    
+    if training_args.gradient_checkpointing: 
+        logging.info("Applying Gradient Checkpointing Patch for NRMS")
+        def enable_checkpointing(kwargs=None):
+            nrms_net.news_encoder.plm.gradient_checkpointing_enable(kwargs)
+        nrms_net.gradient_checkpointing_enable = enable_checkpointing
 
     """
     2. Load Data & Create Dataset
