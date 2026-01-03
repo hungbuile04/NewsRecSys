@@ -3,54 +3,17 @@ import numpy as np
 import torch
 from pathlib import Path
 from config.config import TrainConfig
-from const.path import LOG_OUTPUT_DIR, MIND_LARGE_TRAIN_DATASET_DIR, MIND_SMALL_DATASET_DIR, MIND_SMALL_TRAIN_DATASET_DIR, MIND_SMALL_VAL_DATASET_DIR, MODEL_OUTPUT_DIR
-from evaluation.RecEvaluator import RecEvaluator, RecMetrics
+from const.path import LOG_OUTPUT_DIR, MODEL_OUTPUT_DIR
+# from evaluation.RecEvaluator import RecEvaluator, RecMetrics # Tạm bỏ nếu không eval
 from mind.dataframe import read_behavior_df, read_news_df
-from mind.MINDDataset import MINDTrainDataset, MINDValDataset
+from mind.MINDDataset import MINDTrainDataset
 from recommendation.nrms import NRMS, PLMBasedNewsEncoder, UserEncoder
 from torch import nn
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 from transformers import AutoConfig, AutoTokenizer, Trainer, TrainingArguments
-from transformers.modeling_outputs import ModelOutput
 from utils.logger import logging
 from utils.path import generate_folder_name_with_timestamp
 from utils.random_seed import set_random_seed
-from utils.text import create_transform_fn_from_pretrained_tokenizer
-
-
-def evaluate(net: torch.nn.Module, eval_mind_dataset: MINDValDataset, device: torch.device) -> RecMetrics:
-    net.eval()
-    EVAL_BATCH_SIZE = 1
-    eval_dataloader = DataLoader(eval_mind_dataset, batch_size=EVAL_BATCH_SIZE, pin_memory=True)
-
-    val_metrics_list: list[RecMetrics] = []
-    for batch in tqdm(eval_dataloader, desc="Evaluation for MINDValDataset"):
-        # Inference
-        batch["news_histories"] = batch["news_histories"].to(device)
-        batch["candidate_news"] = batch["candidate_news"].to(device)
-        batch["target"] = batch["target"].to(device)
-        with torch.no_grad():
-            model_output: ModelOutput = net(**batch)
-
-        # Convert To Numpy
-        y_score: torch.Tensor = model_output.logits.flatten().cpu().to(torch.float64).numpy()
-        y_true: torch.Tensor = batch["target"].flatten().cpu().to(torch.int).numpy()
-
-        # Calculate Metrics
-        val_metrics_list.append(RecEvaluator.evaluate_all(y_true, y_score))
-
-    rec_metrics = RecMetrics(
-        **{
-            "ndcg_at_10": np.average([metrics_item.ndcg_at_10 for metrics_item in val_metrics_list]),
-            "ndcg_at_5": np.average([metrics_item.ndcg_at_5 for metrics_item in val_metrics_list]),
-            "auc": np.average([metrics_item.auc for metrics_item in val_metrics_list]),
-            "mrr": np.average([metrics_item.mrr for metrics_item in val_metrics_list]),
-        }
-    )
-
-    return rec_metrics
-
+# from utils.text import create_transform_fn_from_pretrained_tokenizer # Không cần dùng nữa
 
 def train(
     pretrained: str,
@@ -70,22 +33,21 @@ def train(
     """
     0. Definite Parameters & Functions
     """
-    EVAL_BATCH_SIZE = 1
     hidden_size: int = AutoConfig.from_pretrained(pretrained).hidden_size
     loss_fn: nn.Module = nn.CrossEntropyLoss()
-    transform_fn = create_transform_fn_from_pretrained_tokenizer(AutoTokenizer.from_pretrained(pretrained), max_len)
+    
+    # --- THAY ĐỔI 1: Khởi tạo Tokenizer trực tiếp ---
+    tokenizer = AutoTokenizer.from_pretrained(pretrained)
 
     # create a run name
     run_path = generate_folder_name_with_timestamp(MODEL_OUTPUT_DIR)
     run_name = run_path.name
 
-    # Try mount Google Drive (Colab). If available, save checkpoints directly to Drive.
-    in_colab = False
+    # Mount Google Drive logic (như cũ)
     try:
         drive_base = Path("/content/drive/MyDrive") / "recsys_model"
         drive_base.mkdir(parents=True, exist_ok=True)
         model_save_dir = drive_base / run_name
-        in_colab = True
     except Exception:
         model_save_dir = run_path
 
@@ -102,23 +64,25 @@ def train(
     """
     2. Load Data & Create Dataset
     """
-    # logging.info("Initialize Dataset")
-
-    # train_news_df = read_news_df(MIND_LARGE_TRAIN_DATASET_DIR / "news.tsv")
-    # train_behavior_df = read_behavior_df(MIND_LARGE_TRAIN_DATASET_DIR / "behaviors.tsv")
-    # train_dataset = MINDTrainDataset(train_behavior_df, train_news_df, transform_fn, npratio, history_size, device)
-
     data_path = Path(data_dir) 
     logging.info(f"Loading Data from: {data_path}")
 
     train_news_df = read_news_df(data_path / "news.tsv")
     train_behavior_df = read_behavior_df(data_path / "behaviors.tsv")
-    train_dataset = MINDTrainDataset(train_behavior_df, train_news_df, transform_fn, npratio, history_size)
+    
+    # --- THAY ĐỔI 2: Truyền Tokenizer và max_len vào Dataset ---
+    logging.info("Initializing Dataset (Pre-tokenizing)...")
+    train_dataset = MINDTrainDataset(
+        behavior_df=train_behavior_df,
+        news_df=train_news_df,
+        tokenizer=tokenizer,      # <--- Mới
+        max_len=max_len,          # <--- Mới
+        npratio=npratio,
+        history_size=history_size,
+        device=device # Truyền device nếu muốn (nhưng nên để CPU xử lý data)
+    )
 
-    eval_dataset = None
-    # val_news_df = read_news_df(MIND_SMALL_VAL_DATASET_DIR / "news.tsv")
-    # val_behavior_df = read_behavior_df(MIND_SMALL_VAL_DATASET_DIR / "behaviors.tsv")
-    # eval_dataset = MINDValDataset(val_behavior_df, val_news_df, transform_fn, history_size)
+    eval_dataset = None # Bỏ qua eval
 
     """
     3. Train
@@ -127,18 +91,18 @@ def train(
     training_args = TrainingArguments(
         output_dir=str(model_save_dir),
         logging_strategy="steps",
-        logging_steps=100,                                             # Log mỗi 100 step
+        logging_steps=100,
         save_total_limit=5,
         lr_scheduler_type="constant",
         weight_decay=weight_decay,
         optim="adamw_torch",
         evaluation_strategy="no",
-        save_strategy="steps",                                         # Save checkpoint theo step thay vì epoch
-        save_steps=1000,                                               # Save mỗi 1000 step
-        num_train_epochs=1,                                            # Train bằng 1 epoch, có thể sửa ở config nhưng thôi làm thế này tiện hơn
-        dataloader_num_workers=2,                                      # Tối ưu CPU
-        fp16=True,                                                     # Tối ưu GPU
-        gradient_checkpointing=True,                                   # Tối ưu GPU
+        save_strategy="steps",
+        save_steps=1000,
+        num_train_epochs=epochs,         # Dùng biến epochs từ config
+        dataloader_num_workers=4,        # Tăng lên 4 worker để tận dụng CPU
+        fp16=True,
+        gradient_checkpointing=True,
         gradient_accumulation_steps=gradient_accumulation_steps,
         learning_rate=learning_rate,
         per_device_train_batch_size=batch_size,
@@ -147,27 +111,25 @@ def train(
         report_to="none",
     )
 
+    # --- ĐOẠN GRADIENT CHECKPOINTING BẠN HỎI ---
     if training_args.gradient_checkpointing:
         logging.info("Applying Gradient Checkpointing Patch for NRMS (Manual Mode)")
         
         def enable_checkpointing(gradient_checkpointing_kwargs=None, **kwargs):
-            # 1. Lấy model DistilBERT ra
+            # Lấy model gốc (DistilBERT) nằm sâu bên trong NRMS
             distilbert = nrms_net.news_encoder.plm
             
-            # 2. BẬT CỜ THỦ CÔNG (Quan trọng nhất)
-            # Thay vì gọi hàm enable() gây lỗi, ta tự set biến này thành True
+            # Bật cờ checkpointing
             distilbert.gradient_checkpointing = True
-            
-            # Set luôn trong config cho chắc chắn
             if hasattr(distilbert, "config"):
                 distilbert.config.gradient_checkpointing = True
-                # Tắt cache để tránh lỗi tính toán khi checkpointing
+                # TẮT CACHE LÀ BẮT BUỘC khi dùng gradient checkpointing
                 if hasattr(distilbert.config, "use_cache"):
                     distilbert.config.use_cache = False
             
-            logging.info("Gradient Checkpointing has been MANUALLY ENABLED (Flags set to True).")
+            logging.info("Gradient Checkpointing has been MANUALLY ENABLED.")
 
-        # Gán hàm thủ công này đè lên hàm của NRMS
+        # Gán hàm này cho model để Trainer gọi được
         nrms_net.gradient_checkpointing_enable = enable_checkpointing
 
     trainer = Trainer(
@@ -176,6 +138,7 @@ def train(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
     )
+    
     if resume_checkpoint is not None:
         logging.info(f"Resuming training from checkpoint: {resume_checkpoint}")
         trainer.train(resume_from_checkpoint=resume_checkpoint)
@@ -183,19 +146,10 @@ def train(
         logging.info("Starting training from scratch")
         trainer.train()
 
-    """
-    4. Evaluate model by Validation Dataset
-    """
-    logging.info("Training Completed.")             # Chỗ này không cần eval nữa vì train trên MIND Large full rồi
-    # logging.info("Evaluation")
-    # metrics = evaluate(trainer.model, eval_dataset, device)
-    # logging.info(metrics.dict())
-
-    # Lưu model cuối cùng
+    # Lưu model cuối
     final_save_path = model_save_dir / "final_model"
     trainer.save_model(str(final_save_path))
     logging.info(f"Final model saved at {final_save_path}")
-
 
 @hydra.main(version_base=None, config_name="train_config")
 def main(cfg: TrainConfig) -> None:
@@ -211,12 +165,12 @@ def main(cfg: TrainConfig) -> None:
             cfg.learning_rate,
             cfg.weight_decay,
             cfg.max_len,
-            cfg.resume_checkpoint,      # truyền thêm tham số resume_checkpoint
-            cfg.data_dir                # truyền thêm tham số data_dir
+            cfg.resume_checkpoint,
+            cfg.data_dir
         )
     except Exception as e:
         logging.error(e)
-
+        raise e # Raise lỗi để còn debug nếu chết
 
 if __name__ == "__main__":
     main()
