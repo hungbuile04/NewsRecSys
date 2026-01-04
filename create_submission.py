@@ -3,10 +3,12 @@ import torch.nn as nn
 from transformers import AutoModel, AutoConfig, AutoTokenizer
 import numpy as np
 import json
+import os
+import argparse
 from tqdm import tqdm
 
 # ======================================================
-# 1. Load model architecture consistently with training
+# 1. Model Architecture (FIXED)
 # ======================================================
 def init_weights(m: nn.Module) -> None:
     if isinstance(m, nn.Linear):
@@ -14,140 +16,170 @@ def init_weights(m: nn.Module) -> None:
         if m.bias is not None:
             nn.init.zeros_(m.bias)
 
-
 class AdditiveAttention(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int) -> None:
         super().__init__()
         self.attention = nn.Sequential(
-            nn.Linear(
-                input_dim, hidden_dim
-            ),  # in: (batch_size, seq_len, input_dim), out: (batch_size, seq_len, hidden_dim)
-            nn.Tanh(),  # in: (batch_size, seq_len, hidden_dim), out: (batch_size, seq_len, hidden_dim)
-            nn.Linear(
-                hidden_dim, 1, bias=False
-            ),  # in: (batch_size, seq_len, hidden_dim), out: (batch_size, seq_len, 1)
+            nn.Linear(input_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, 1, bias=False),
             nn.Softmax(dim=-2),
         )
         self.attention.apply(init_weights)
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        attention_weight = self.attention(input)
-        return input * attention_weight
-
+    def forward(self, input_val: torch.Tensor) -> torch.Tensor:
+        context = self.attention(input_val)
+        output = torch.sum(input_val * context, dim=1)
+        return output
 
 class PLMBasedNewsEncoder(nn.Module):
-    def __init__(
-        self,
-        pretrained="bert-base-uncased",
-        multihead_attn_num_heads=16,
-        additive_attn_hidden_dim=200,
-    ):
+    def __init__(self, pretrained: str = "distilbert-base-uncased"):
         super().__init__()
         self.plm = AutoModel.from_pretrained(pretrained)
-        plm_hidden = AutoConfig.from_pretrained(pretrained).hidden_size
-
+        plm_hidden_size = AutoConfig.from_pretrained(pretrained).hidden_size
         self.multihead_attention = nn.MultiheadAttention(
-            embed_dim=plm_hidden, num_heads=multihead_attn_num_heads, batch_first=True
+            embed_dim=plm_hidden_size, num_heads=16, batch_first=True
         )
+        self.additive_attention = AdditiveAttention(plm_hidden_size, 200)
 
-        self.additive_attention = AdditiveAttention(plm_hidden, additive_attn_hidden_dim)
+    def forward(self, input_val: torch.Tensor) -> torch.Tensor:
+        V = self.plm(input_val).last_hidden_state
+        multihead_attn_output, _ = self.multihead_attention(V, V, V)
+        additive_attn_output = self.additive_attention(multihead_attn_output)
+        
+        # [QUAN TRỌNG] Đã xóa torch.sum(...) thừa ở đây
+        # Trả về vector embedding [Batch, Hidden] chuẩn
+        return additive_attn_output
 
-    def forward(self, input_ids, attention_mask=None):
-        V = self.plm(input_ids, attention_mask=attention_mask).last_hidden_state
-        V2, _ = self.multihead_attention(V, V, V)
-        A = self.additive_attention(V2)
-        return torch.sum(A, dim=1)        # [batch, hidden]
+class UserEncoder(nn.Module):
+    def __init__(self, hidden_dim: int) -> None:
+        super().__init__()
+        self.additive_attention = AdditiveAttention(hidden_dim, 200)
 
+    def forward(self, news_histories: torch.Tensor, news_encoder: nn.Module) -> torch.Tensor:
+        batch_size, hist_size, seq_len = news_histories.size()
+        news_histories = news_histories.view(batch_size * hist_size, seq_len)
+        news_histories_encoded = news_encoder(news_histories)
+        news_histories_encoded = news_histories_encoded.view(batch_size, hist_size, -1)
+        user_vector = self.additive_attention(news_histories_encoded)
+        return user_vector
+
+class NRMS(nn.Module):
+    def __init__(self, news_encoder: nn.Module, user_encoder: nn.Module, hidden_size: int) -> None:
+        super().__init__()
+        self.news_encoder = news_encoder
+        self.user_encoder = user_encoder
+        self.hidden_size = hidden_size
 
 # ======================================================
-# 2. Load checkpoint
+# 2. Logic
 # ======================================================
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+def load_model(checkpoint_path: str, device: torch.device):
+    print(f"🔄 Loading model from: {checkpoint_path}")
+    pretrained = "distilbert-base-uncased"
+    hidden_size = AutoConfig.from_pretrained(pretrained).hidden_size
 
-model_dir = "model/checkpoint-2943 2"
-pretrained_name = "bert-base-uncased"
+    news_encoder = PLMBasedNewsEncoder(pretrained)
+    user_encoder = UserEncoder(hidden_size)
+    model = NRMS(news_encoder, user_encoder, hidden_size)
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint, strict=False)
+    
+    model.to(device)
+    model.eval()
+    return model, pretrained
 
-tokenizer = AutoTokenizer.from_pretrained(pretrained_name)
+def generate_submission(model, tokenizer, news_path, behaviors_path, output_path, device, max_len=30):
+    directory = os.path.dirname(output_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
 
-news_encoder = PLMBasedNewsEncoder(pretrained=pretrained_name)
-state_dict = torch.load(f"{model_dir}/pytorch_model.bin", map_location=DEVICE)
-news_encoder.load_state_dict(state_dict, strict=False)
-news_encoder.to(DEVICE).eval()
-
-# ======================================================
-# 3. Load news.tsv and encode all news
-# ======================================================
-def load_news(news_path):
-    news_index = {}
-    with open(news_path, "r") as f:
+    print("🔄 Reading News Data...")
+    news_titles = {}
+    with open(news_path, "r", encoding="utf-8") as f:
         for line in f:
-            nid, category, subcat, title, abstract, url, title_ent, abs_ent = line.strip("\n").split("\t")
-            news_index[nid] = title
-    return news_index
+            parts = line.strip().split("\t")
+            nid, title = parts[0], parts[3]
+            news_titles[nid] = title
 
-def encode_news(news_index):
+    print(f"🔄 Encoding {len(news_titles)} news items...")
     news_vecs = {}
-    for nid, title in tqdm(news_index.items(), desc="Encoding news"):
-        encoded = tokenizer(title, padding="max_length", truncation=True, max_length=32, return_tensors="pt")
-        input_ids = encoded["input_ids"].to(DEVICE)
-        mask = encoded["attention_mask"].to(DEVICE)
-        vec = news_encoder(input_ids, attention_mask=mask)
-        news_vecs[nid] = vec.detach().cpu()
-    return news_vecs
+    batch_size = 128
+    news_ids = list(news_titles.keys())
+    
+    for i in tqdm(range(0, len(news_ids), batch_size)):
+        batch_ids = news_ids[i : i + batch_size]
+        batch_titles = [news_titles[nid] for nid in batch_ids]
+        
+        inputs = tokenizer(
+            batch_titles, 
+            padding="max_length", 
+            truncation=True, 
+            max_length=max_len, 
+            return_tensors="pt"
+        ).input_ids.to(device)
+        
+        with torch.no_grad():
+            vecs = model.news_encoder(inputs)
+        
+        for nid, vec in zip(batch_ids, vecs):
+            news_vecs[nid] = vec
 
-
-# ======================================================
-# 4. Load behaviors.tsv and compute scores
-# ======================================================
-def generate_prediction(behaviors_path, news_vecs, outfile="prediction.txt"):
-    out = open(outfile, "w")
-
-    with open(behaviors_path, "r") as f:
-        for line in tqdm(f, desc="Predicting"):
-            parts = line.strip("\n").split("\t")
-            imp_id = parts[0]
-            history = parts[3].split() if parts[3] != "" else []
-            impressions = parts[4].split()
-
-            # user vector = mean pooling of history
-            if len(history) > 0:
-                hist_vecs = [news_vecs[n] for n in history if n in news_vecs]
-                user_vec = torch.mean(torch.cat(hist_vecs, dim=0), dim=0)
-            else:
-                user_vec = torch.zeros_like(list(news_vecs.values())[0][0])
-
-            user_vec = user_vec.unsqueeze(0)
-
-            # candidate ids
-            cand_ids = [impr.split("-")[0] for impr in impressions]
-            scores = []
-
-            for nid in cand_ids:
-                if nid in news_vecs:
-                    s = torch.cosine_similarity(user_vec, news_vecs[nid], dim=1).item()
+    print("🔄 Processing Behaviors & Generating Predictions...")
+    
+    with open(output_path, "w") as out:
+        with open(behaviors_path, "r", encoding="utf-8") as f:
+            for line in tqdm(f):
+                parts = line.strip().split("\t")
+                imp_id = parts[0]
+                history = parts[3].split(" ") if len(parts) > 3 and parts[3] else []
+                impressions = parts[4].split(" ")
+                
+                hist_vecs = [news_vecs[nid].unsqueeze(0) for nid in history if nid in news_vecs]
+                
+                if hist_vecs:
+                    user_vec = torch.mean(torch.cat(hist_vecs, dim=0), dim=0).unsqueeze(0)
                 else:
-                    s = 0.0
-                scores.append(s)
+                    user_vec = torch.zeros(1, model.hidden_size).to(device)
 
-            # ranking: larger score → smaller rank number
-            order = np.argsort(scores)[::-1]
-            ranks = np.zeros(len(scores), dtype=np.int32)
-            ranks[order] = np.arange(1, len(scores) + 1)
+                cand_ids = [impr.split("-")[0] for impr in impressions]
+                scores = []
+                for nid in cand_ids:
+                    if nid in news_vecs:
+                        # Giờ đây news_vecs[nid] đã là vector [Hidden], unsqueeze(0) thành [1, Hidden]
+                        # user_vec là [1, Hidden]
+                        # Cosine Similarity chạy trên dim=1 sẽ hoạt động đúng
+                        s = torch.cosine_similarity(user_vec, news_vecs[nid].unsqueeze(0), dim=1).item()
+                    else:
+                        s = 0.0
+                    scores.append(s)
 
-            # convert list to EXACT required format: no spaces
-            rank_str = json.dumps(ranks.tolist(), separators=(',', ':'))
+                order = np.argsort(scores)[::-1]
+                ranks = np.zeros(len(scores), dtype=np.int32)
+                ranks[order] = np.arange(1, len(scores) + 1)
 
-            out.write(f"{imp_id} {rank_str}\n")
+                rank_str = json.dumps(ranks.tolist(), separators=(',', ':'))
+                out.write(f"{imp_id} {rank_str}\n")
 
-    out.close()
+    print(f"✅ Done! Submission saved to {output_path}")
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--news_path", type=str, required=True)
+    parser.add_argument("--behaviors_path", type=str, required=True)
+    parser.add_argument("--checkpoint_path", type=str, required=True)
+    parser.add_argument("--output_path", type=str, default="prediction.txt")
+    args = parser.parse_args()
 
-# ======================================================
-# RUN
-# ======================================================
-news_path = "/Users/buihung/RecSys/data/MINDlarge_test/news.tsv" #Thay đường dẫn đến file data đầu vào ở đây
-behaviors_path = "/Users/buihung/RecSys/data/MINDlarge_test/behaviors.tsv"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model, pretrained = load_model(args.checkpoint_path, device)
+    tokenizer = AutoTokenizer.from_pretrained(pretrained)
 
-news_index = load_news(news_path)
-news_vecs = encode_news(news_index)
-generate_prediction(behaviors_path, news_vecs, outfile="prediction.txt")
+    generate_submission(
+        model, tokenizer, 
+        args.news_path, 
+        args.behaviors_path, 
+        args.output_path, 
+        device
+    )
