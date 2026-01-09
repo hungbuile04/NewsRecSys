@@ -1,5 +1,0 @@
-[2025-11-17 22:10:49,822][root][INFO] - Start
-[2025-11-17 22:10:55,720][root][INFO] - Initialize Model
-[2025-11-17 22:10:57,515][root][INFO] - Initialize Dataset
-[2025-11-17 22:11:19,489][root][INFO] - Training Start
-[2025-11-17 22:11:20,490][root][ERROR] - Trying to convert BFloat16 to the MPS backend but it does not have support for that dtype.
