@@ -48,6 +48,3 @@ Ví dụ chạy (Hydra được dùng trong `src/experiments/train.py`):
 - Chạy:
   - pytest -q
 
----
-
-Nếu cần bản README tiếng Anh hoặc muốn thêm badge / hướng dẫn deploy nhanh (Colab / Docker), báo để cập nhật.
